@@ -1,0 +1,13 @@
+[project]
+name = "mrc2movie"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncio>=3.4.3",
+    "mrcfile>=1.5.3",
+    "numpy>=2.2.1",
+    "opencv-python>=4.10.0.84",
+    "tqdm>=4.67.1",
+]
