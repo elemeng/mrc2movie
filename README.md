@@ -33,7 +33,7 @@ A high-performance Python script to batch convert `.mrc` files (e.g., tilt serie
 
 2. **Clone or Download the Script:**
    ```bash
-   git clone https://github.com/yourusername/mrc2movie.git
+   git clone https://github.com/elemeng/mrc2movie.git
    cd mrc2movie
    ```
 
