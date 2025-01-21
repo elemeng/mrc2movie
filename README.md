@@ -106,25 +106,25 @@ output_directory/
 
 ### **Examples**
 
-1. **Basic Conversion with PNG Output:**
+1. **Basic Conversion with both movie and PNG Output:**
    ```bash
    python mrc2movie.py /path/to/mrc_files /path/to/output --png
    ```
    Converts all `.mrc` files while saving both movies and individual PNG slices.
 
-2. **Custom Frame Rate and Contrast with PNG Output:**
+2. **Custom Frame Rate and Contrast movie (with PNG Output):**
    ```bash
    python mrc2movie.py /path/to/mrc_files /path/to/output --fps 15 --clip_limit 3.0 --png
    ```
    Creates movies at 15 FPS with higher contrast (clip_limit=3.0) while saving PNG slices.
 
-3. **Selective Slice Processing with PNG Output:**
+3. **Selective Slice Processing movie (with PNG Output):**
    ```bash
    python mrc2movie.py /path/to/mrc_files /path/to/output --discard_range 10 20 --png
    ```
    Processes slices while skipping slices 10-19 (0-based indexing) and saves both movies and PNGs.
 
-4. **Percentage-based Slice Discard with PNG Output:**
+4. **Percentage-based Slice Discard movie (with PNG Output):**
    ```bash
    python mrc2movie.py /path/to/mrc_files /path/to/output --discard_percentage 0.1 0.2 --png
    ```
