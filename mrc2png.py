@@ -25,7 +25,13 @@ def main():
         "--output_size",
         type=int,
         default=1024,
-        help="Maximum dimension for output images (default: 1024).",
+        help="Resize output images to a maximum dimension of SIZE",
+    )
+    parser.add_argument(
+        "--clip_limit",
+        type=float,
+        default=2.0,
+        help="CLAHE clip limit for contrast enhancement",
     )
     args = parser.parse_args()
 
@@ -43,7 +49,7 @@ def main():
 
     # Save PNGs
     basename = os.path.splitext(os.path.basename(args.input_path))[0]
-    write_slices_to_png(args.output_dir, basename, tomogram, args.output_size)
+    write_slices_to_png(args.output_dir, basename, tomogram, args.output_size, args.clip_limit)
 
     logging.info("PNG conversion complete.")
     print("PNG conversion complete.")

@@ -3,7 +3,7 @@ import os
 import mrcfile
 import numpy as np
 import cv2
-import tqdm
+from tqdm import tqdm
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -98,6 +98,8 @@ def write_slices_to_png(
     basename: str,
     slices: np.ndarray,
     output_size: Optional[int] = None,
+    clip_limit: float = 2.0,
+    tile_grid_size: int = 8,
 ) -> None:
     """
     Write processed slices to PNG files using parallel I/O operations.
@@ -130,36 +132,46 @@ def write_slices_to_png(
         new_width = width
         new_height = height
 
-    def write_single_png(slice: np.ndarray, index: int) -> Optional[str]:
-        """Write a single slice to PNG with error handling."""
+    # Calculate global min/max for normalization
+    global_min = np.min(slices)
+    global_max = np.max(slices)
+
+    def process_and_write_slice(slice: np.ndarray, index: int) -> Optional[str]:
+        """Process and write a single slice to PNG with error handling."""
         try:
-            # Convert to 8-bit if needed
-            if slice.dtype != np.uint8:
-                slice = cv2.normalize(
-                    slice, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
-                )
+            # Normalize slice using global min/max
+            normalized_slice = normalize_slice(slice, global_min, global_max)
+
+            # Apply CLAHE contrast enhancement
+            clahe = cv2.createCLAHE(
+                clipLimit=clip_limit, 
+                tileGridSize=(tile_grid_size, tile_grid_size)
+            )
+            enhanced_slice = clahe.apply(normalized_slice)
 
             # Resize if needed
             if output_size:
-                slice = cv2.resize(
-                    slice, (new_width, new_height), interpolation=cv2.INTER_AREA
+                enhanced_slice = cv2.resize(
+                    enhanced_slice, 
+                    (new_width, new_height), 
+                    interpolation=cv2.INTER_AREA
                 )
 
             # Format filename with 4-digit number
             filename = os.path.join(png_dir, f"{basename}_{index:04d}.png")
-            success = cv2.imwrite(filename, slice)
+            success = cv2.imwrite(filename, enhanced_slice)
             if not success:
                 raise IOError(f"Failed to write {filename}")
             return filename
         except Exception as e:
-            logging.error(f"Error writing slice {index}: {str(e)}")
+            logging.error(f"Error processing slice {index}: {str(e)}")
             return None
 
     # Use ThreadPoolExecutor for parallel I/O
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         # Create futures for all slices
         futures = {
-            executor.submit(write_single_png, slice, i): i
+            executor.submit(process_and_write_slice, slice, i): i
             for i, slice in enumerate(slices)
         }
 
