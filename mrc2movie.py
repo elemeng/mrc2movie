@@ -42,7 +42,6 @@ async def write_video_async(
         out = cv2.VideoWriter(
             output_path, fourcc, fps, (new_width, new_height), isColor=False
         )
-
         # Write forward frames
         for frame in frames:
             out.write(frame)
@@ -55,6 +54,7 @@ async def write_video_async(
                 out.write(frame)
 
         out.release()
+
         logging.info(f"Saved: {output_path}")
     except Exception as e:
         logging.error(f"Error writing {output_path}: {str(e)}", exc_info=True)
@@ -113,7 +113,9 @@ async def process_tomogram_async(
                     desc="Processing slices",
                 )
             )
-
+            for frame in tomogram_eq:
+                logging.info(f"Frame min: {frame.min()}, Frame max: {frame.max()}")
+        
         # Save PNGs if enabled
         if save_png:
             basename = os.path.splitext(os.path.basename(input_path))[0]
