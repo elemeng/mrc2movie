@@ -1,66 +1,44 @@
 import argparse
-import os
-import mrcfile
+import asyncio
+from mrc_utils import (
+    read_tomogram,
+    discard_slices,
+    write_slices_to_png,
+    process_slice,
+)
 import numpy as np
+from typing import Optional, Tuple, List
 import cv2
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
 import logging
-import asyncio
-
-# Configure logging
-logging.basicConfig(
-    filename="mrc2movie.log",  # Log file name
-    level=logging.INFO,  # Log info and errors
-    format="%(asctime)s - %(levelname)s - %(message)s",  # Log format
-    filemode="w",  # Overwrite log file each run
-)
-
-
-def normalize_slice(slice_data, global_min, global_max):
-    """Normalize a single slice to 0-255 using global min and max."""
-    slice_float = slice_data.astype(np.float32)
-    slice_float -= global_min
-    if global_max > global_min:  # Avoid division by zero
-        slice_float /= global_max - global_min
-    slice_float *= 255
-    return slice_float.astype(np.uint8)
-
-
-def process_slice(args):
-    """Process a single slice (normalize + CLAHE)."""
-    slice_data, global_min, global_max, clip_limit, tile_grid_size = args
-    normalized_slice = normalize_slice(slice_data, global_min, global_max)
-
-    # Initialize CLAHE inside the worker process
-    clahe = cv2.createCLAHE(
-        clipLimit=clip_limit, tileGridSize=(tile_grid_size, tile_grid_size)
-    )
-    return clahe.apply(normalized_slice)
-
-
-async def read_tomogram_async(input_path):
-    """Asynchronously read a tomogram using memory-mapped I/O."""
-    try:
-        with mrcfile.mmap(input_path, mode="r") as mrc:
-            tomogram = mrc.data
-            logging.info(
-                f"Read: {input_path} | Shape: {tomogram.shape} | Type: {tomogram.dtype}"
-            )
-            return tomogram
-    except Exception as e:
-        logging.error(f"Error reading {input_path}: {str(e)}", exc_info=True)
-        print(f"Error reading {input_path}: {str(e)}")
-        return None
-
+import os
 
 async def write_video_async(
-    output_path, frames, fps, width, height, codec, playback_direction
-):
-    """Asynchronously write frames to a video file."""
+    output_path: str,
+    frames: List[np.ndarray],
+    fps: float,
+    width: int,
+    height: int,
+    codec: str,
+    playback_direction: str,
+    output_size: Optional[int] = None,
+) -> None:
+    """
+    Asynchronously write frames to a video file.
+    """
     try:
+        # Calculate output dimensions if size specified
+        if output_size:
+            scale = min(output_size / max(width, height), 1.0)  # Don't upscale
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+        else:
+            new_width = width
+            new_height = height
+
         fourcc = cv2.VideoWriter_fourcc(*codec)
-        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height), isColor=False)
+        out = cv2.VideoWriter(output_path, fourcc, fps, (new_width, new_height), isColor=False)
 
         # Write forward frames
         for frame in frames:
@@ -68,9 +46,7 @@ async def write_video_async(
 
         # Write reverse frames if playback_direction is "forward-backward"
         if playback_direction == "forward-backward":
-            for frame in reversed(
-                frames[1:-1]
-            ):  # Exclude first and last to avoid duplicates
+            for frame in reversed(frames[1:-1]):  # Exclude first and last to avoid duplicates
                 out.write(frame)
 
         out.release()
@@ -80,71 +56,34 @@ async def write_video_async(
         print(f"Error writing {output_path}: {str(e)}")
 
 
-def discard_slices(tomogram, discard_range=None, discard_percentage=None):
-    """Discard slices based on range or percentage."""
-    num_slices = tomogram.shape[0]
-
-    if discard_range:
-        start, end = discard_range
-        if start < 0 or end > num_slices or start >= end:
-            raise ValueError(f"Invalid discard range: {discard_range}")
-        return tomogram[start:end]
-
-    if discard_percentage:
-        start_percent, end_percent = discard_percentage
-        if not (0 <= start_percent < 1 and 0 <= end_percent < 1):
-            raise ValueError(f"Invalid discard percentage: {discard_percentage}")
-        start = int(num_slices * start_percent)
-        end = int(num_slices * (1 - end_percent))
-        return tomogram[start:end]
-
-    return tomogram
-
-
-def write_slices_to_png(basename, slices):
-    """Write processed slices to PNG files.
-
-    Args:
-        basename (str): Base name for output directory and files
-        slices (np.ndarray): Array of processed slices (height, width, num_slices)
-    """
-    # Create output directory
-    output_dir = f"{basename}_slices"
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Write each slice as PNG
-    for i, slice in enumerate(slices):
-        # Convert to 8-bit if needed
-        if slice.dtype != np.uint8:
-            slice = cv2.normalize(slice, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-
-        # Format filename with 4-digit number
-        filename = os.path.join(output_dir, f"{basename}_{i:04d}.png")
-        cv2.imwrite(filename, slice)
-
-
 async def process_tomogram_async(
-    input_path,
-    output_path,
-    fps,
-    clip_limit,
-    tile_grid_size,
-    codec,
-    playback_direction,
-    discard_range,
-    discard_percentage,
-    save_png=False,
-):
-    """Process a single tomogram asynchronously."""
+    input_path: str,
+    output_path: str,
+    fps: float,
+    clip_limit: float,
+    tile_grid_size: int,
+    codec: str,
+    playback_direction: str,
+    discard_range: Optional[Tuple[int, int]],
+    discard_percentage: Optional[Tuple[float, float]],
+    save_png: bool = False,
+    output_size: int = 1024,
+) -> None:
+    """
+    Process a single tomogram asynchronously.
+    """
     try:
         # Read tomogram (I/O-bound)
-        tomogram = await read_tomogram_async(input_path)
+        tomogram = read_tomogram(input_path)
         if tomogram is None:
             return
 
-        # Check if the data is a 3D array
-        if tomogram.ndim != 3:
-            raise ValueError(f"Skipping {input_path}: Not a 3D array.")
+        # Check array dimensions
+        if tomogram.ndim == 2:
+            # Handle single frame as 3D array with one slice
+            tomogram = np.expand_dims(tomogram, axis=0)
+        elif tomogram.ndim != 3:
+            raise ValueError(f"Skipping {input_path}: Not a 2D or 3D array.")
 
         # Discard slices if specified
         tomogram = discard_slices(tomogram, discard_range, discard_percentage)
@@ -173,12 +112,12 @@ async def process_tomogram_async(
         # Save PNGs if enabled
         if save_png:
             basename = os.path.splitext(os.path.basename(input_path))[0]
-            write_slices_to_png(basename, np.array(tomogram_eq))
+            write_slices_to_png(os.path.dirname(output_path), basename, np.array(tomogram_eq), output_size)
 
         # Write video (I/O-bound)
         height, width = tomogram.shape[1], tomogram.shape[2]
         await write_video_async(
-            output_path, tomogram_eq, fps, width, height, codec, playback_direction
+            output_path, tomogram_eq, fps, width, height, codec, playback_direction, output_size
         )
     except Exception as e:
         # Log the error and continue
@@ -187,6 +126,7 @@ async def process_tomogram_async(
 
 
 async def main():
+    """Main function to process MRC tomograms into movies."""
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
         description="Batch process MRC tomograms into movies with enhanced contrast."
@@ -237,6 +177,12 @@ async def main():
         action="store_true",
         help="Save processed slices as PNG files in addition to video output.",
     )
+    parser.add_argument(
+        "--output_size",
+        type=int,
+        default=1024,
+        help="Maximum dimension for output images/video (default: 1024).",
+    )
     args = parser.parse_args()
 
     # Ensure output directory exists
@@ -253,9 +199,7 @@ async def main():
     tasks = []
     for mrc_file in mrc_files:
         input_path = os.path.join(args.input_dir, mrc_file)
-        output_path = os.path.join(
-            args.output_dir, f"{os.path.splitext(mrc_file)[0]}.avi"
-        )
+        output_path = os.path.join(args.output_dir, f"{os.path.splitext(mrc_file)[0]}.avi")
         tasks.append(
             process_tomogram_async(
                 input_path,
@@ -268,6 +212,7 @@ async def main():
                 args.discard_range,
                 args.discard_percentage,
                 args.png,
+                args.output_size,
             )
         )
 
