@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "asyncio>=3.4.3",
+    "flask>=3.1.0",
     "mrcfile>=1.5.3",
     "numpy>=2.2.1",
     "opencv-python>=4.10.0.84",
