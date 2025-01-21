@@ -1,6 +1,6 @@
 ### **Introduction**
 
-After collecting your tomography tilt series, you need a quick and convenient way to assess and share the quality of your data. Similarly, after aligning and reconstructing tomograms, you want to present them as movies in presentations or share them with colleagues. However, there are no straightforward tools to directly convert **`.mrc`** files into movies, making the process cumbersome.
+After collecting tomography tilt series data, researchers need an efficient method to evaluate and share data quality. Following tomogram alignment and reconstruction, presenting results as movies is essential for both presentations and collaboration. However, the lack of direct tools for converting **`.mrc`** files to movies creates unnecessary complexity in the workflow.
 
 To address this, I created this script to **batch convert `.mrc` files** (such as tilt series and tomograms) into high-quality movies with enhanced contrast. The script offers customizable options to fine-tune the speed, contrast, and playback direction of the movies, making it easy to visualize and share your data. Enjoy exploring the microscopic world with ease! ^v^
 
@@ -32,7 +32,6 @@ A high-performance Python script to batch convert `.mrc` files (e.g., tilt serie
 
 1. **Install Python (if not already installed):**
    - Download and install Python from [python.org](https://www.python.org/).
-   - Using `conda` or any other virtual environment manager is recommended for better dependency management.
 
 2. **Clone or Download the Script:**
    ```bash
@@ -40,16 +39,13 @@ A high-performance Python script to batch convert `.mrc` files (e.g., tilt serie
    cd mrc2movie
    ```
 
-3. **(Recommended) Create a Virtual Environment:**
+3. **(Recommended) Using uv to set up Virtual Environment:**
    ```bash
-   conda create -n mrc2movie python=3.12
-   conda activate mrc2movie
+   pip install uv
+   uv sync
    ```
-
-4. **Install Required Libraries:**
-   ```bash
-   pip install mrcfile numpy opencv-python tqdm asyncio
-   ```
+   **Nice, everything is prepared for you to run this script.**
+   Optionally, You can also use conda to set up an Virtual Environment
 
 ---
 
