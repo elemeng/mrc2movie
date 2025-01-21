@@ -7,8 +7,11 @@ requires-python = ">=3.12"
 dependencies = [
     "asyncio>=3.4.3",
     "flask>=3.1.0",
+    "flet>=0.25.2",
     "mrcfile>=1.5.3",
     "numpy>=2.2.1",
     "opencv-python>=4.10.0.84",
+    "pillow>=11.1.0",
+    "pip>=24.3.1",
     "tqdm>=4.67.1",
 ]

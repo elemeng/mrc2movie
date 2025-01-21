@@ -101,6 +101,28 @@ def discard_slices(tomogram, discard_range=None, discard_percentage=None):
     return tomogram
 
 
+def write_slices_to_png(basename, slices):
+    """Write processed slices to PNG files.
+
+    Args:
+        basename (str): Base name for output directory and files
+        slices (np.ndarray): Array of processed slices (height, width, num_slices)
+    """
+    # Create output directory
+    output_dir = f"{basename}_slices"
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Write each slice as PNG
+    for i, slice in enumerate(slices):
+        # Convert to 8-bit if needed
+        if slice.dtype != np.uint8:
+            slice = cv2.normalize(slice, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+
+        # Format filename with 4-digit number
+        filename = os.path.join(output_dir, f"{basename}_{i:04d}.png")
+        cv2.imwrite(filename, slice)
+
+
 async def process_tomogram_async(
     input_path,
     output_path,
@@ -111,6 +133,7 @@ async def process_tomogram_async(
     playback_direction,
     discard_range,
     discard_percentage,
+    save_png=False,
 ):
     """Process a single tomogram asynchronously."""
     try:
@@ -146,6 +169,11 @@ async def process_tomogram_async(
                     desc="Processing slices",
                 )
             )
+
+        # Save PNGs if enabled
+        if save_png:
+            basename = os.path.splitext(os.path.basename(input_path))[0]
+            write_slices_to_png(basename, np.array(tomogram_eq))
 
         # Write video (I/O-bound)
         height, width = tomogram.shape[1], tomogram.shape[2]
@@ -204,6 +232,11 @@ async def main():
         metavar=("START_PERCENT", "END_PERCENT"),
         help="Discard START_PERCENT from the beginning and END_PERCENT from the end (e.g., 0.1 0.1).",
     )
+    parser.add_argument(
+        "--png",
+        action="store_true",
+        help="Save processed slices as PNG files in addition to video output.",
+    )
     args = parser.parse_args()
 
     # Ensure output directory exists
@@ -234,6 +267,7 @@ async def main():
                 args.playback,
                 args.discard_range,
                 args.discard_percentage,
+                args.png,
             )
         )
 
