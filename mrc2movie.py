@@ -14,6 +14,7 @@ from multiprocessing import Pool, cpu_count
 import logging
 import os
 
+
 async def write_video_async(
     output_path: str,
     frames: List[np.ndarray],
@@ -38,7 +39,9 @@ async def write_video_async(
             new_height = height
 
         fourcc = cv2.VideoWriter_fourcc(*codec)
-        out = cv2.VideoWriter(output_path, fourcc, fps, (new_width, new_height), isColor=False)
+        out = cv2.VideoWriter(
+            output_path, fourcc, fps, (new_width, new_height), isColor=False
+        )
 
         # Write forward frames
         for frame in frames:
@@ -46,7 +49,9 @@ async def write_video_async(
 
         # Write reverse frames if playback_direction is "forward-backward"
         if playback_direction == "forward-backward":
-            for frame in reversed(frames[1:-1]):  # Exclude first and last to avoid duplicates
+            for frame in reversed(
+                frames[1:-1]
+            ):  # Exclude first and last to avoid duplicates
                 out.write(frame)
 
         out.release()
@@ -112,12 +117,24 @@ async def process_tomogram_async(
         # Save PNGs if enabled
         if save_png:
             basename = os.path.splitext(os.path.basename(input_path))[0]
-            write_slices_to_png(os.path.dirname(output_path), basename, np.array(tomogram_eq), output_size)
+            write_slices_to_png(
+                os.path.dirname(output_path),
+                basename,
+                np.array(tomogram_eq),
+                output_size,
+            )
 
         # Write video (I/O-bound)
         height, width = tomogram.shape[1], tomogram.shape[2]
         await write_video_async(
-            output_path, tomogram_eq, fps, width, height, codec, playback_direction, output_size
+            output_path,
+            tomogram_eq,
+            fps,
+            width,
+            height,
+            codec,
+            playback_direction,
+            output_size,
         )
     except Exception as e:
         # Log the error and continue
@@ -189,7 +206,7 @@ async def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Find all MRC files in the input directory
-    mrc_files = [f for f in os.listdir(args.input_dir) if f.endswith(".mrc")]
+    mrc_files = [f for f in os.listdir(args.input_dir) if f.endswith((".mrc", ".st"))]
     if not mrc_files:
         logging.error(f"No MRC files found in {args.input_dir}.")
         print(f"No MRC files found in {args.input_dir}.")
@@ -199,7 +216,9 @@ async def main():
     tasks = []
     for mrc_file in mrc_files:
         input_path = os.path.join(args.input_dir, mrc_file)
-        output_path = os.path.join(args.output_dir, f"{os.path.splitext(mrc_file)[0]}.avi")
+        output_path = os.path.join(
+            args.output_dir, f"{os.path.splitext(mrc_file)[0]}.avi"
+        )
         tasks.append(
             process_tomogram_async(
                 input_path,
