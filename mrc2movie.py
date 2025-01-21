@@ -38,18 +38,23 @@ async def write_video_async(
             new_width = width
             new_height = height
 
+        # Resize all frames to match output dimensions
+        resized_frames = [
+            cv2.resize(frame, (new_width, new_height)) for frame in frames
+        ]
+
         fourcc = cv2.VideoWriter_fourcc(*codec)
         out = cv2.VideoWriter(
             output_path, fourcc, fps, (new_width, new_height), isColor=False
         )
         # Write forward frames
-        for frame in frames:
+        for frame in resized_frames:
             out.write(frame)
 
         # Write reverse frames if playback_direction is "forward-backward"
         if playback_direction == "forward-backward":
             for frame in reversed(
-                frames[1:-1]
+                resized_frames[1:-1]
             ):  # Exclude first and last to avoid duplicates
                 out.write(frame)
 
@@ -115,7 +120,7 @@ async def process_tomogram_async(
             )
             for frame in tomogram_eq:
                 logging.info(f"Frame min: {frame.min()}, Frame max: {frame.max()}")
-        
+
         # Save PNGs if enabled
         if save_png:
             basename = os.path.splitext(os.path.basename(input_path))[0]
@@ -156,13 +161,13 @@ async def main():
         "--fps",
         type=float,
         default=30.0,
-        help="Frame rate for the output movie (default: 30.0).",
+        help="Frame rate for the output movie (default: 30.0, good for built tomogram; for tilt series, using 1~5 is better. Try other numbers by your self.).",
     )
     parser.add_argument(
         "--clip_limit",
         type=float,
         default=2.0,
-        help="CLAHE clip limit for contrast enhancement (default: 2.0).",
+        help="CLAHE clip limit for contrast enhancement (default: 2.0; try 30~1000 for tilt series, because their SNR is too low).",
     )
     parser.add_argument(
         "--tile_grid_size",
