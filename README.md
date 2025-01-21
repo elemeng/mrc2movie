@@ -1,8 +1,10 @@
 ### **Introduction**
 
-After collecting your tomography tilt series, you need a quick and convenient way to assess and share the quality of your data. Similarly, after aligning and reconstructing tomograms, you want to present them as movies in presentations or share them with colleagues. However, there are no straightforward tools to directly convert `.mrc` files into movies, making the process cumbersome.
+After collecting your tomography tilt series, you need a quick and convenient way to assess and share the quality of your data. Similarly, after aligning and reconstructing tomograms, you want to present them as movies in presentations or share them with colleagues. However, there are no straightforward tools to directly convert **`.mrc`** files into movies, making the process cumbersome.
 
 To address this, I created this script to **batch convert `.mrc` files** (such as tilt series and tomograms) into high-quality movies with enhanced contrast. The script offers customizable options to fine-tune the speed, contrast, and playback direction of the movies, making it easy to visualize and share your data. Enjoy exploring the microscopic world with ease! ^v^
+
+You can also use this to save the tomogram tilt seriers or reconstructured tomograms into **`pngs`**.
 
 ---
 
@@ -19,6 +21,7 @@ A high-performance Python script to batch convert `.mrc` files (e.g., tilt serie
 - **Global Normalization:** Normalize slices using global min/max values for consistent contrast.
 - **Playback Direction:** Choose between **forward-only** or **forward-backward** playback.
 - **Discard Slices:** Discard a range of slices or a percentage of slices from the beginning and end.
+- **PNG Output:** Optionally save processed slices as PNG images.
 - **Rich Logging:** Logs detailed information and errors to `mrc2movie.log`.
 - **Progress Bars:** Displays progress bars for slice and tomogram processing.
 - **Customizable Parameters:** Control frame rate, CLAHE settings, video codec, and more.
@@ -57,7 +60,7 @@ A high-performance Python script to batch convert `.mrc` files (e.g., tilt serie
 Run the script with the following command:
 
 ```bash
-python mrc2movie.py input_directory output_directory [--fps FPS] [--clip_limit CLIP_LIMIT] [--tile_grid_size TILE_GRID_SIZE] [--codec CODEC] [--playback {forward,forward-backward}] [--discard_range START END] [--discard_percentage START_PERCENT END_PERCENT]
+python mrc2movie.py input_directory output_directory [--fps FPS] [--clip_limit CLIP_LIMIT] [--tile_grid_size TILE_GRID_SIZE] [--codec CODEC] [--playback {forward,forward-backward}] [--discard_range START END] [--discard_percentage START_PERCENT END_PERCENT] [--png]
 ```
 
 ### **Arguments**
@@ -73,33 +76,66 @@ python mrc2movie.py input_directory output_directory [--fps FPS] [--clip_limit C
 | `--playback`            | Playback direction: `forward` or `forward-backward`.                       | `forward-backward`    |
 | `--discard_range`       | Discard slices from START to END (0-based indexing).                        | None                  |
 | `--discard_percentage`  | Discard START_PERCENT from the beginning and END_PERCENT from the end.      | None                  |
-|
+| `--png`                 | Save processed slices as PNG files in addition to video output.            | False                 |
+
+### **PNG Output**
+
+When using the `--png` flag, the script will save individual slices as PNG images alongside the video output. This is useful for detailed inspection of specific slices or for creating custom visualizations.
+
+**Output Structure:**
+- For each input `.mrc` file, a new directory will be created with the naming pattern: `{input_basename}_slices`
+- Each slice will be saved as a PNG file with 4-digit sequential numbering (e.g., `input_0000.png`, `input_0001.png`, etc.)
+- The PNG files will have the same contrast enhancement and normalization as the video output
+- The directory structure will be preserved relative to the input files
+
+**Example Output:**
+```
+output_directory/
+├── input1.avi
+├── input1_slices/
+│   ├── input1_0000.png
+│   ├── input1_0001.png
+│   └── ...
+└── subdir/
+    ├── input2.avi
+    └── input2_slices/
+        ├── input2_0000.png
+        ├── input2_0001.png
+        └── ...
+```
 
 ### **Examples**
 
-1. **Default Settings:**
+1. **Basic Conversion with PNG Output:**
    ```bash
-   python mrc2movie.py /path/to/mrc_files_dir /path/to/output_dir
+   python mrc2movie.py /path/to/mrc_files /path/to/output --png
    ```
-   This converts all `.mrc` files in the `mrc_files_dir` directory into movies saved in the `output_dir` directory, each retaining their original filenames. By default, these movies will have a frame rate of 30 fps. You can adjust the `--fps` parameter to control the playback speed.
+   Converts all `.mrc` files while saving both movies and individual PNG slices.
 
-2. **Forward-Backward Playback with Discard Percentage:**
+2. **Custom Frame Rate and Contrast with PNG Output:**
    ```bash
-   python mrc2movie.py /path/to/mrc_files_directory /path/to/output_directory --fps 25 --clip_limit 1.5 --playback forward-backward --discard_percentage 0.1 0.2
+   python mrc2movie.py /path/to/mrc_files /path/to/output --fps 15 --clip_limit 3.0 --png
    ```
-   These output movies will have a frame rate of 25 fps (slower than the default 30 fps), lower contrast (due to the `clip_limit` of 1.5), and a forward-backward loop playback. The `--discard_percentage 0.1 0.2` option discards 10% of slices from the beginning and 20% from the end of each tomogram. This is useful when the beginning and end of the tomogram are empty or contain artifacts.
+   Creates movies at 15 FPS with higher contrast (clip_limit=3.0) while saving PNG slices.
 
-3. **Forward-Only Playback with Discard Range:**
+3. **Selective Slice Processing with PNG Output:**
    ```bash
-   python mrc2movie.py /path/to/mrc_files /path/to/output --fps 10 --clip_limit 1.5 --playback forward --discard_range 10 20
+   python mrc2movie.py /path/to/mrc_files /path/to/output --discard_range 10 20 --png
    ```
-   This command processes the `.mrc` files, discarding slices 10 to 19 (0-based indexing) and creating forward-only playback movies with a frame rate of 10 fps and a `clip_limit` of 1.5.
+   Processes slices while skipping slices 10-19 (0-based indexing) and saves both movies and PNGs.
+
+4. **Percentage-based Slice Discard with PNG Output:**
+   ```bash
+   python mrc2movie.py /path/to/mrc_files /path/to/output --discard_percentage 0.1 0.2 --png
+   ```
+   Discards 10% of slices from the start and 20% from the end while saving PNGs of the remaining slices.
 
 ---
 
 ## **Output**
 
 - **Movies:** Saved in the specified `output_directory` with the same base name as the input `.mrc` files but with a `.avi` extension.
+- **PNG Slices:** Saved in `{basename}_slices` directories when using the `--png` flag.
 - **Logs:** Detailed logs are written to `mrc2movie.log`.
 
 ---
