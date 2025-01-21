@@ -1,4 +1,5 @@
 import argparse
+import sys
 from mrc_utils import read_tomogram, discard_slices, write_slices_to_png
 import os
 import logging
@@ -49,10 +50,14 @@ def main():
 
     # Save PNGs
     basename = os.path.splitext(os.path.basename(args.input_path))[0]
-    write_slices_to_png(args.output_dir, basename, tomogram, args.output_size, args.clip_limit)
-
-    logging.info("PNG conversion complete.")
-    print("PNG conversion complete.")
+    try:
+        write_slices_to_png(args.output_dir, basename, tomogram, args.output_size, args.clip_limit)
+        logging.info("PNG conversion complete.")
+        print(f"Successfully converted {args.input_path} to PNGs in {args.output_dir}")
+    except Exception as e:
+        logging.error(f"Error converting {args.input_path}: {str(e)}")
+        print(f"Error converting {args.input_path}: {str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

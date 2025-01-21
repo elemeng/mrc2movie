@@ -109,8 +109,8 @@ def write_slices_to_png(
         raise ValueError("output_dir must be a non-empty string")
     if not isinstance(basename, str) or not basename:
         raise ValueError("basename must be a non-empty string")
-    if not isinstance(slices, np.ndarray) or slices.ndim != 3:
-        raise ValueError("slices must be a 3D numpy array")
+    if not isinstance(slices, np.ndarray) or slices.ndim not in (2, 3):
+        raise ValueError("slices must be a 2D or 3D numpy array")
     if output_size is not None and (
         not isinstance(output_size, int) or output_size <= 0
     ):
@@ -120,10 +120,47 @@ def write_slices_to_png(
     png_dir = os.path.join(output_dir, f"{basename}_slices")
     os.makedirs(png_dir, exist_ok=True)
 
-    # Get original dimensions
-    height, width = slices[0].shape[:2]
+    # Handle 2D case (single slice)
+    if slices.ndim == 2:
+        # Calculate scale factor if output_size specified
+        height, width = slices.shape
+        if output_size:
+            scale = min(output_size / max(width, height), 1.0)  # Don't upscale
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+        else:
+            new_width = width
+            new_height = height
 
-    # Calculate scale factor if output_size specified
+        # Normalize and process single slice
+        global_min = np.min(slices)
+        global_max = np.max(slices)
+        normalized_slice = normalize_slice(slices, global_min, global_max)
+        
+        # Apply CLAHE contrast enhancement
+        clahe = cv2.createCLAHE(
+            clipLimit=clip_limit, 
+            tileGridSize=(tile_grid_size, tile_grid_size)
+        )
+        enhanced_slice = clahe.apply(normalized_slice)
+
+        # Resize if needed
+        if output_size:
+            enhanced_slice = cv2.resize(
+                enhanced_slice, 
+                (new_width, new_height), 
+                interpolation=cv2.INTER_AREA
+            )
+
+        # Write single PNG file
+        filename = os.path.join(output_dir, f"{basename}.png")
+        success = cv2.imwrite(filename, enhanced_slice)
+        if not success:
+            raise IOError(f"Failed to write {filename}")
+        return
+
+    # Handle 3D case (multiple slices)
+    height, width = slices[0].shape[:2]
     if output_size:
         scale = min(output_size / max(width, height), 1.0)  # Don't upscale
         new_width = int(width * scale)
