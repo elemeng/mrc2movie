@@ -102,7 +102,7 @@ async def process_tomogram_async(
         # Compute global min and max for consistent normalization
         global_min = tomogram.min()
         global_max = tomogram.max()
-        logging.info(f"Global min: {global_min}, Global max: {global_max}")
+        # logging.info(f"Global min: {global_min}, Global max: {global_max}")
 
         # Process slices in parallel (CPU-bound)
         num_processes = cpu_count()
@@ -118,8 +118,8 @@ async def process_tomogram_async(
                     desc="Processing slices",
                 )
             )
-            for frame in tomogram_eq:
-                logging.info(f"Frame min: {frame.min()}, Frame max: {frame.max()}")
+            # for frame in tomogram_eq:
+            # logging.info(f"Frame min: {frame.min()}, Frame max: {frame.max()}")
 
         # Save PNGs if enabled
         if save_png:
