@@ -9,7 +9,7 @@ build/
 dist/
 wheels/
 *.egg-info
-uplaods/
+uploads/
 .coverage
 htmlcov/
 .pytest_cache/
@@ -30,6 +30,7 @@ ENV/
 # Logs
 *.log
 logs/
+mrc2movie.log
 
 # Documentation
 docs/_build/
@@ -38,5 +39,13 @@ docs/_templates/
 
 # Test artifacts
 test_output/
+temp/
+examples/output/
 
+# Output files
+*.avi
+*.png
+*_slices/
+
+# Project specific
 CLAUDE.md
