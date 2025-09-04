@@ -10,61 +10,185 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: windows-latest
+          # Windows
+          - os: windows-2019
             out_name: mrc2movie-windows.exe
+            python-version: "3.8"
+          - os: windows-latest
+            out_name: mrc2movie-windows-latest.exe
+            python-version: "3.12"
+          
+          # RHEL family (7-10)
+          - os: ubuntu-20.04
+            out_name: mrc2movie-rhel7
+            python-version: "3.8"
+            container: quay.io/pypa/manylinux2014_x86_64
+          - os: ubuntu-22.04
+            out_name: mrc2movie-rhel8
+            python-version: "3.9"
+            container: quay.io/pypa/manylinux_2_28_x86_64
+          - os: ubuntu-22.04
+            out_name: mrc2movie-rhel9
+            python-version: "3.9"
+            container: rockylinux:9
+          - os: ubuntu-22.04
+            out_name: mrc2movie-rhel10
+            python-version: "3.12"
+            container: rockylinux:10
+
+          # Debian family (10-13)
+          - os: ubuntu-20.04
+            out_name: mrc2movie-debian10
+            python-version: "3.8"
+            container: debian:10
+          - os: ubuntu-20.04
+            out_name: mrc2movie-debian11
+            python-version: "3.9"
+            container: debian:11
+          - os: ubuntu-22.04
+            out_name: mrc2movie-debian12
+            python-version: "3.11"
+            container: debian:12
           - os: ubuntu-latest
-            out_name: mrc2movie-linux
+            out_name: mrc2movie-debian13
+            python-version: "3.12"
+            container: debian:13
+
+          # Arch family (5 years ago to now)
+          - os: ubuntu-20.04
+            out_name: mrc2movie-arch-2019
+            python-version: "3.8"
+            container: archlinux:20191006
+          - os: ubuntu-22.04
+            out_name: mrc2movie-arch-2021
+            python-version: "3.9"
+            container: archlinux:20211001
+          - os: ubuntu-22.04
+            out_name: mrc2movie-arch-2023
+            python-version: "3.11"
+            container: archlinux:20231001
+          - os: ubuntu-latest
+            out_name: mrc2movie-arch-latest
+            python-version: "3.12"
+            container: archlinux:latest
+          
+          # macOS (3-4 years old)
+          - os: macos-11
+            out_name: mrc2movie-macos-catalina
+            python-version: "3.8"
+          - os: macos-12
+            out_name: mrc2movie-macos-monterey
+            python-version: "3.9"
+          - os: macos-latest
+            out_name: mrc2movie-macos-latest
+            python-version: "3.12"
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Install Python (RHEL family)
+        if: contains(matrix.container, 'rockylinux') || contains(matrix.container, 'manylinux')
+        run: |
+          if command -v dnf &> /dev/null; then
+            dnf install -y python3-pip python3-devel gcc
+          elif command -v yum &> /dev/null; then
+            yum install -y python3-pip python3-devel gcc
+          fi
+          ln -sf /usr/bin/python3 /usr/bin/python3 || true
+        shell: bash
+
+      - name: Install Python (Debian family)
+        if: contains(matrix.container, 'debian')
+        run: |
+          apt-get update
+          apt-get install -y python3 python3-pip python3-setuptools gcc
+          ln -sf /usr/bin/python3 /usr/bin/python3 || true
+        shell: bash
+
+      - name: Install Python (Arch family)
+        if: contains(matrix.container, 'archlinux')
+        run: |
+          pacman -Sy --noconfirm python python-pip base-devel
+          ln -sf /usr/bin/python3 /usr/bin/python3 || true
+        shell: bash
+
+      - name: Install Python (ManyLinux)
+        if: contains(matrix.container, 'manylinux')
+        run: |
+          /opt/python/cp38-cp38/bin/pip install pyinstaller || /opt/python/cp39-cp39/bin/pip install pyinstaller || /opt/python/cp311-cp311/bin/pip install pyinstaller
+          ln -sf /opt/python/cp38-cp38/bin/python3 /usr/bin/python3 || ln -sf /opt/python/cp39-cp39/bin/python3 /usr/bin/python3 || ln -sf /opt/python/cp311-cp311/bin/python3 /usr/bin/python3
+        shell: bash
+
+      - name: Set up Python
+        if: matrix.container == ''
         uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install project + PyInstaller
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyinstaller .
         shell: bash
 
-      # ---- build one-file binary ----
-      - name: PyInstaller (one-file)
+      # ---- build mrc2movie binary ----
+      - name: Build mrc2movie
         run: |
           pyinstaller --onefile \
                       --name mrc2movie \
-                      src/mrc2movie/cli.py   # <-- adjust entry point
+                      mrc2movie.py
         shell: bash
 
-      # ---- rename for clarity ----
-      - name: Rename artefact
-        run: mv dist/mrc2movie* dist/${{ matrix.out_name }}
+      # ---- build mrc2png binary ----
+      - name: Build mrc2png
+        run: |
+          pyinstaller --onefile \
+                      --name mrc2png \
+                      mrc2png.py
         shell: bash
 
-      # ---- upload so other jobs can see it ----
-      - name: Upload artefact
+      # ---- rename and collect binaries ----
+      - name: Rename mrc2movie
+        run: mv dist/mrc2movie* dist/mrc2movie-${{ matrix.os }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+        shell: bash
+
+      - name: Rename mrc2png
+        run: mv dist/mrc2png* dist/mrc2png-${{ matrix.os }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+        shell: bash
+
+      # ---- upload artifacts ----
+      - name: Upload mrc2movie artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.out_name }}
-          path: dist/${{ matrix.out_name }}
+          name: mrc2movie-${{ matrix.os }}
+          path: dist/mrc2movie-${{ matrix.os }}*
+
+      - name: Upload mrc2png artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mrc2png-${{ matrix.os }}
+          path: dist/mrc2png-${{ matrix.os }}*
 
   # ----------------------------------------------------------
-  # OPTIONAL: create a GitHub release and attach the binaries
+  # Create GitHub release and attach the binaries
   # ----------------------------------------------------------
   release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Download artefacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           merge-multiple: true
 
-      - name: Make Linux binary executable
-        run: chmod +x mrc2movie-linux
+      - name: Make binaries executable
+        run: |
+          chmod +x mrc2movie-*
+          chmod +x mrc2png-*
+        shell: bash
 
       - name: Create / update release
         uses: softprops/action-gh-release@v2
@@ -74,5 +198,5 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            mrc2movie-windows.exe
-            mrc2movie-linux
+            mrc2movie-*
+            mrc2png-*
