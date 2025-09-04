@@ -1,33 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "mrc2png_and_movie"
+name = "mrc2movie"
 version = "0.1.0"
-description = "A tool for converting MRC files to movie formats and image sequences"
+description = "High-performance MRC tomogram to movie converter"
 readme = "README.md"
 requires-python = ">=3.12"
-license = {text = "MIT"}
-authors = [
-    {name = "Your Name", email = "your.email@example.com"}
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Science/Research",
-    "Programming Language :: Python :: 3.12",
-]
-
 dependencies = [
-    "asyncio>=3.4.3",
-    "flet>=0.27.4",
-    "mrcfile>=1.5.3",
-    "numpy>=2.2.1",
-    "opencv-python>=4.10.0.84",
-    "pdoc>=15.0.1",
-    "pillow>=11.1.0",
-    "pip>=25.0.1",
-    "pyoxidizer>=0.24.0",
+    "mrcfile>=1.5.4",
+    "numpy>=2.3.2",
+    "opencv-python>=4.11.0.86",
     "tqdm>=4.67.1",
 ]
 
-[[bin]]
-name = "mrc2movie"
-path = "mrc2movie.py"
-description = "A tool for converting MRC files to movie formats and image sequences"
+[project.scripts]
+mrc2movie = "mrc2movie:main"
+mrc2png = "mrc2png:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["*.py"]
+exclude = ["tests*"]

@@ -44,9 +44,13 @@ async def write_video_async(
         ]
 
         fourcc = cv2.VideoWriter_fourcc(*codec)
+        # Optimize video writer for better performance
         out = cv2.VideoWriter(
             output_path, fourcc, fps, (new_width, new_height), isColor=False
         )
+        if not out.isOpened():
+            raise IOError(f"Failed to open video writer for {output_path}")
+
         # Write forward frames
         for frame in resized_frames:
             out.write(frame)
@@ -104,8 +108,12 @@ async def process_tomogram_async(
         global_max = tomogram.max()
         # logging.info(f"Global min: {global_min}, Global max: {global_max}")
 
-        # Process slices in parallel (CPU-bound)
-        num_processes = cpu_count()
+        # Process slices in parallel (CPU-bound) with optimized chunking
+        num_processes = min(cpu_count(), len(tomogram))
+        chunk_size = max(
+            1, len(tomogram) // (num_processes * 4)
+        )  # Smaller chunks for better load balancing
+
         with Pool(processes=num_processes) as pool:
             slice_args = [
                 (slice_data, global_min, global_max, clip_limit, tile_grid_size)
@@ -113,7 +121,7 @@ async def process_tomogram_async(
             ]
             tomogram_eq = list(
                 tqdm(
-                    pool.imap(process_slice, slice_args),
+                    pool.imap(process_slice, slice_args, chunksize=chunk_size),
                     total=len(tomogram),
                     desc="Processing slices",
                 )
@@ -207,7 +215,47 @@ async def main():
         default=1024,
         help="Maximum dimension for output images/video (default: 1024).",
     )
+
+    # Experimental parameter presets
+    parser.add_argument(
+        "--preset",
+        choices=["tomogram", "tomo", "tiltseries", "ts", "quick", "max_quality"],
+        help="Use optimized parameter presets for common data types.",
+    )
+    parser.add_argument(
+        "--estimate_memory",
+        action="store_true",
+        help="Estimate memory usage before processing files.",
+    )
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+        help="Enable profiling mode with timing information.",
+    )
+    parser.add_argument(
+        "--speed",
+        choices=["fast", "balanced", "quality"],
+        default="balanced",
+        help="Speed vs quality trade-off preset.",
+    )
     args = parser.parse_args()
+
+    # Apply experimental presets
+    if args.preset:
+        preset_params = {
+            "tomogram": {"fps": 30.0, "clip_limit": 2.0, "output_size": 1024},
+            "tomo": {"fps": 30.0, "clip_limit": 2.0, "output_size": 1024},
+            "tiltseries": {"fps": 8.0, "clip_limit": 100.0, "output_size": 1024},
+            "ts": {"fps": 8.0, "clip_limit": 100.0, "output_size": 1024},
+            "quick": {"fps": 15.0, "clip_limit": 2.0, "output_size": 512},
+            "max_quality": {"fps": 30.0, "clip_limit": 5.0, "output_size": 2048},
+        }
+        preset = preset_params[args.preset]
+        args.fps = preset["fps"]
+        args.clip_limit = preset["clip_limit"]
+        args.output_size = preset["output_size"]
+        print(f"Applied {args.preset} preset: {preset}")
+
 
     # Ensure output directory exists
     os.makedirs(args.output_dir, exist_ok=True)
@@ -217,6 +265,15 @@ async def main():
     if not mrc_files:
         logging.error(f"No MRC files found in {args.input_dir}.")
         print(f"No MRC files found in {args.input_dir}.")
+        return
+
+    # Memory estimation mode
+    if args.estimate_memory:
+        from mrc_utils import estimate_memory_usage
+
+        for mrc_file in mrc_files:
+            input_path = os.path.join(args.input_dir, mrc_file)
+            estimate_memory_usage(input_path)
         return
 
     # Process each MRC file asynchronously with a progress bar

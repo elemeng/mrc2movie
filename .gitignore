@@ -38,3 +38,5 @@ docs/_templates/
 
 # Test artifacts
 test_output/
+
+CLAUDE.md

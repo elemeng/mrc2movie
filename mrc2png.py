@@ -4,6 +4,7 @@ from mrc_utils import read_tomogram, discard_slices, write_slices_to_png
 import os
 import logging
 
+
 def main():
     parser = argparse.ArgumentParser(description="Convert MRC tomograms to PNG slices.")
     parser.add_argument("input_path", help="Path to the input MRC file.")
@@ -51,7 +52,9 @@ def main():
     # Save PNGs
     basename = os.path.splitext(os.path.basename(args.input_path))[0]
     try:
-        write_slices_to_png(args.output_dir, basename, tomogram, args.output_size, args.clip_limit)
+        write_slices_to_png(
+            args.output_dir, basename, tomogram, args.output_size, args.clip_limit
+        )
         logging.info("PNG conversion complete.")
         print(f"Successfully converted {args.input_path} to PNGs in {args.output_dir}")
     except Exception as e:
