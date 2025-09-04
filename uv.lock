@@ -139,6 +139,7 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "black" },
+    { name = "pyoxidizer" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -150,6 +151,7 @@ requires-dist = [
     { name = "mrcfile", specifier = ">=1.5.4" },
     { name = "numpy", specifier = ">=2.3.2" },
     { name = "opencv-python", specifier = ">=4.11.0.86" },
+    { name = "pyoxidizer", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
@@ -301,6 +303,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b0140bde72ea885a803b82086995367bf2037de0159d924/pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887", size = 4968631, upload-time = "2025-06-21T13:39:12.283Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
+]
+
+[[package]]
+name = "pyoxidizer"
+version = "0.24.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/93/aae15e73855e6e9a327528b506b4ae2e6e0f94d301fed8f27015bbe047e4/pyoxidizer-0.24.0-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:eed0f08a38798f14cf0464272552aef97e534b9a418d2a671b8d85ec7af1a237", size = 10386860, upload-time = "2022-12-30T01:38:16.544Z" },
+    { url = "https://files.pythonhosted.org/packages/ab/bc/ac789f384f84583a5057b6198553e407e1116375cf1840427bad56d1f97f/pyoxidizer-0.24.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:1a9940d2bdb6c9e6c6c45eb4de3d4d6e5c9b3a3724dbc7d774d85d4956058447", size = 9705975, upload-time = "2022-12-30T01:38:18.958Z" },
+    { url = "https://files.pythonhosted.org/packages/62/e5/2f5a9cc8fb06aff4fe84299bf7fa9815b1eaee81842137e0e98a45ab1b3e/pyoxidizer-0.24.0-py3-none-manylinux2010_x86_64.whl", hash = "sha256:ec56f2b99495aa0178e927389a3e151e9669beae4e2bce3f6897fb9891b5502e", size = 12356489, upload-time = "2022-12-30T01:38:21.52Z" },
+    { url = "https://files.pythonhosted.org/packages/72/ff/02653151eb66ce7c945ee19aadcbdd5cd6a8e13e201254bb6a787df851dd/pyoxidizer-0.24.0-py3-none-manylinux2014_aarch64.whl", hash = "sha256:825d37c8d44971f3e7ca6beed77b560b508c69497f48019428f1aae3fd80c049", size = 11986314, upload-time = "2022-12-30T01:38:23.875Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/a5/dea667d142e7fe1df7e0f3436df8e9fbebce0a8538fa06534f28492291fd/pyoxidizer-0.24.0-py3-none-win32.whl", hash = "sha256:4ccc59d157952bccb6ab6897f061966ac31403b2cee18fe9dfbd871f429bd34c", size = 8490488, upload-time = "2022-12-30T01:38:26.078Z" },
+    { url = "https://files.pythonhosted.org/packages/54/b8/0a8b6c744af3d553f0a7ac8affec7d40a9544a08d6c8b84164003c87c133/pyoxidizer-0.24.0-py3-none-win_amd64.whl", hash = "sha256:9b18f8d5f6b309ec856109b2f4d8228bae513da0b0213991e3305cf73583c385", size = 9014460, upload-time = "2022-12-30T01:38:28.125Z" },
 ]
 
 [[package]]
