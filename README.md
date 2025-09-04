@@ -24,6 +24,7 @@ cd mrc2movie
 
 # Using uv (recommended for dev)
 uv sync                    # Install dependencies
+uv sync --extra dev        # Install test dependencies
 uv run mrc2movie --help    # Run via uv
 uv run pytest              # Run tests
 ```
@@ -312,7 +313,8 @@ git clone https://github.com/your-repo/mrc2movie
 cd mrc2movie
 
 # Install and activate virtual environment
-uv sync
+uv sync                    # Install dependencies
+uv sync --extra dev        # Install dev dependencies
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Run tools directly
