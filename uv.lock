@@ -19,7 +19,7 @@ wheels = [
 [[package]]
 name = "mrc2movie"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "mrcfile" },
     { name = "numpy" },

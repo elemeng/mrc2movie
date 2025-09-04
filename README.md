@@ -26,6 +26,8 @@ cd mrc2movie
 uv sync                    # Install dependencies
 uv run mrc2movie --help    # Run via uv
 uv run pytest              # Run tests
+```
+
 
 ### Basic Usage
 ```bash
