@@ -7,28 +7,26 @@ A high-performance Python toolset to batch convert .mrc files (e.g., tilt series
 
 ### Installation
 
-#### For Users (pip/uv)
-```bash
-# Install via pip
-pip install mrc2movie
+#### For Users (uv)
 
-# Or via uv (recommended)
-uv pip install mrc2movie
-```
-
-#### For Developers (uv setup)
+##### Clone source code
 ```bash
 # Clone and setup development environment
 git clone https://github.com/your-repo/mrc2movie
 cd mrc2movie
+```
 
-# Using uv (recommended for dev)
+##### Install dependencies using uv (recommended)
+```bash
 uv sync                    # Install dependencies
+```
+
+#### For developer:
+```
 uv sync --extra dev        # Install test dependencies
 uv run mrc2movie --help    # Run via uv
 uv run pytest              # Run tests
 ```
-
 
 ### Basic Usage
 ```bash
