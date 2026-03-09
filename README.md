@@ -12,7 +12,7 @@ A high-performance Python toolset to batch convert .mrc files (e.g., tilt series
 ##### Clone source code
 ```bash
 # Clone and setup development environment
-git clone https://github.com/your-repo/mrc2movie
+git clone https://github.com/elemeng/mrc2movie
 cd mrc2movie
 ```
 
