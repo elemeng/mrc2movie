@@ -307,7 +307,7 @@ diff output/ output_fast/
 
 #### Using uv (Recommended)
 ```bash
-git clone https://github.com/your-repo/mrc2movie
+git clone https://github.com/elemeng/mrc2movie
 cd mrc2movie
 
 # Install and activate virtual environment
@@ -325,13 +325,6 @@ uv run black .
 uv run ruff check .
 ```
 
-#### Using pip
-```bash
-git clone https://github.com/your-repo/mrc2movie
-cd mrc2movie
-pip install -e ".[dev]"
-pytest tests/
-```
 
 ### Adding Tests
 ```python
@@ -349,5 +342,5 @@ MIT License - see LICENSE file for details.
 
 ## 🤝 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/mrc2movie/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/mrc2movie/discussions)
+- **Issues**: [GitHub Issues](https://github.com/elemeng/mrc2movie/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/elemeng/mrc2movie/discussions)
