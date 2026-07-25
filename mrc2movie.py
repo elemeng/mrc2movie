@@ -3,14 +3,13 @@
 Convert MRC tomograms to video with optional particle overlay.
 
 Particles can come from:
-  -i model.mod     IMOD binary file (auto-detected, pure Python parser)
+  -i model.mod     IMOD binary file (via imodfile Rust bindings)
   -p particles.txt text file, one "x y z" per line
 
-Dependencies: pip install mrcfile numpy opencv-python tqdm
+Dependencies: pip install mrcfile numpy opencv-python tqdm imodfile
 """
 
 import argparse
-import struct
 import sys
 from multiprocessing import Pool, cpu_count
 
@@ -25,80 +24,20 @@ except ImportError:
     sys.exit(1)
 
 
-# ═════════════════════════════════════════════════════════════════════════════
-#  IMOD parser — try native bindings first, then pure Python fallback
-# ═════════════════════════════════════════════════════════════════════════════
-
-try:
-    import imodfile as _imodfile
-    _HAS_IMOD_NATIVE = True
-except ImportError:
-    _HAS_IMOD_NATIVE = False
-
-_ID_OBJT = 0x4F424A54  # b"OBJT"
-_ID_CONT = 0x434F4E54  # b"CONT"
-_ID_POIN = 0x504F494E  # b"POIN"
-_ID_IEOF = 0x49454F46  # b"IEOF"
-
-
-def _iter_chunks(data: bytes, start: int = 0):
-    """Yield (chunk_id, chunk_data) from big-endian IMOD binary."""
-    off = start
-    while off + 8 <= len(data):
-        cid = struct.unpack_from(">I", data, off)[0]
-        if cid == _ID_IEOF:
-            break
-        size = struct.unpack_from(">I", data, off + 4)[0]
-        if size == 0:
-            off += 8
-            continue
-        chunk = data[off + 8: off + 8 + size]
-        off += 8 + size
-        if off % 4:
-            off += 4 - (off % 4)
-        yield cid, chunk
-
-
-def load_imod_points(path: str) -> list[tuple[float, float, float]]:
-    """Read all contour points from an IMOD binary file.
-
-    Uses the native Rust imodfile bindings when available,
-    falls back to a pure Python parser otherwise.
-    """
-    if _HAS_IMOD_NATIVE:
-        model = _imodfile.load(path)
-        arr = model.points()  # (N, 3) float32 numpy array
-        return [(float(arr[i, 0]), float(arr[i, 1]), float(arr[i, 2]))
-                for i in range(arr.shape[0])]
-
-    # Pure Python fallback
-    with open(path, "rb") as f:
-        data = f.read()
-    pts = []
-    for cid, chunk in _iter_chunks(data):
-        if cid == _ID_OBJT:
-            _walk_obj(chunk, pts)
-    return pts
-
-
-def _walk_obj(data: bytes, pts: list):
-    for cid, chunk in _iter_chunks(data):
-        if cid == _ID_CONT:
-            _walk_cont(chunk, pts)
-
-
-def _walk_cont(data: bytes, pts: list):
-    for cid, chunk in _iter_chunks(data):
-        if cid == _ID_POIN:
-            for i in range(len(chunk) // 12):
-                off = i * 12
-                x, y, z = struct.unpack_from(">fff", chunk, off)
-                pts.append((x, y, z))
+import imodfile as _imodfile
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  Particle loading
 # ═════════════════════════════════════════════════════════════════════════════
+
+def load_imod_points(path: str) -> list[tuple[float, float, float]]:
+    """Read all contour points from an IMOD file via imodfile Rust bindings."""
+    model = _imodfile.load(path)
+    arr = model.points()  # (N, 3) float32 numpy array
+    return [(float(arr[i, 0]), float(arr[i, 1]), float(arr[i, 2]))
+            for i in range(arr.shape[0])]
+
 
 def load_txt_particles(path: str) -> list[tuple[float, float, float]]:
     """Read x y z particles from a text file."""
