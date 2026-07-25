@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""
+Convert MRC tomograms to video with optional particle overlay.
+
+Particle coordinates can be provided as a simple text file:
+  one particle per line:  x  y  z
+  or:                     x,y,z
+  # comments and blank lines are ignored.
+
+Dependencies: mrcfile, numpy, opencv-python, tqdm
+  pip install mrcfile numpy opencv-python tqdm
+"""
+
+import argparse
+import sys
+from multiprocessing import Pool, cpu_count
+
+import cv2
+import numpy as np
+from tqdm import tqdm
+
+try:
+    import mrcfile
+except ImportError:
+    print("Missing: pip install mrcfile numpy opencv-python tqdm")
+    sys.exit(1)
+
+
+# ── Load particles from a simple text file ──
+
+def load_particles(path: str) -> list[tuple[float, float, float]]:
+    """Read x y z (or x,y,z) particles from a text file."""
+    pts: list[tuple[float, float, float]] = []
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.replace(",", " ").split()
+            if len(parts) < 3:
+                continue
+            try:
+                x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
+                pts.append((x, y, z))
+            except ValueError:
+                continue
+    return pts
+
+
+# ── Slice rendering ──
+
+def render_slice(args: tuple) -> np.ndarray:
+    """Normalize → CLAHE → RGB → draw particles → return BGR frame."""
+    (slice_data, vmin, vmax, clip_limit, tile_size,
+     particles, psize, z, bin_f) = args
+
+    # Normalize to [0, 255]
+    if vmax > vmin:
+        img = np.clip((slice_data.astype(np.float32) - vmin) * (255.0 / (vmax - vmin)), 0, 255).astype(np.uint8)
+    else:
+        img = np.zeros_like(slice_data, dtype=np.uint8)
+
+    # CLAHE
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_size, tile_size))
+    img = clahe.apply(img)
+
+    # To BGR for colour overlay
+    frame = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    # Draw particles
+    if particles and psize > 0:
+        h, w = frame.shape[:2]
+        for px, py, pz in particles:
+            dz = abs(pz - z)
+            if dz <= psize:
+                cx, cy = int(px / bin_f), int(py / bin_f)
+                if 0 <= cx < w and 0 <= cy < h:
+                    r = max(1, round(psize * (1.0 - dz / max(psize, 1))))
+                    cv2.circle(frame, (cx, cy), r, (0, 0, 255), -1)
+
+    return frame
+
+
+# ── Helpers ──
+
+def slice_sequence(start: int, end: int, mode: str, pause: int, cycles: int) -> list[int]:
+    if mode == "forward":
+        return list(range(start, end + 1))
+    # pingpong
+    seq = []
+    for c in range(cycles):
+        seq += list(range(start, end + 1))
+        if c < cycles - 1:
+            seq += [end] * pause
+        seq += list(range(end - 1, start - 1, -1))
+        if c < cycles - 1:
+            seq += [start] * pause
+    return seq
+
+
+def main():
+    p = argparse.ArgumentParser(description="MRC tomogram → video")
+    p.add_argument("-m", "--mrc", required=True)
+    p.add_argument("-p", "--particles", help="x y z particle file (one per line)")
+    p.add_argument("-o", "--output", default="output.avi")
+    p.add_argument("-f", "--fps", type=float, default=10)
+    p.add_argument("-b", "--bin", type=int, default=1, dest="bin_factor", help="Downsample factor")
+    p.add_argument("--start", type=int, default=0)
+    p.add_argument("--end", type=int, default=0, help="0 = last slice")
+    p.add_argument("--clip-limit", type=float, default=2.0, help="CLAHE contrast")
+    p.add_argument("--tile", type=int, default=8, help="CLAHE tile size")
+    p.add_argument("--mode", choices=["forward", "pingpong"], default="pingpong")
+    p.add_argument("--pause", type=int, default=5)
+    p.add_argument("--cycles", type=int, default=1)
+    p.add_argument("--psize", type=int, default=3, help="Particle radius")
+    p.add_argument("--no-parallel", action="store_false", dest="parallel", default=True)
+    args = p.parse_args()
+
+    # Read MRC
+    print(f"📁 {args.mrc}")
+    with mrcfile.mmap(args.mrc, mode="r") as mrc:
+        vol = mrc.data  # shape: (nz, ny, nx)
+    nz, ny, nx = vol.shape
+    print(f"📊 {nx}×{ny}×{nz}")
+
+    # Read particles
+    particles = []
+    if args.particles:
+        particles = load_particles(args.particles)
+        print(f"📌 {len(particles)} particles from {args.particles}")
+
+    # Slice range
+    start = args.start
+    end = args.end if args.end != 0 else nz - 1
+    end = min(end, nz - 1)
+    if start > end:
+        print(f"❌ start {start} > end {end}"); sys.exit(1)
+
+    seq = slice_sequence(start, end, args.mode, args.pause, args.cycles)
+    total = len(seq)
+    print(f"🎬 {total} frames, {total/args.fps:.1f}s @ {args.fps}fps")
+
+    out_w, out_h = nx // args.bin_factor, ny // args.bin_factor
+    print(f"📐 {out_w}×{out_h}")
+
+    # Load volume data
+    vol = np.array(vol, dtype=np.float32, copy=False)
+    vmin, vmax = float(vol.min()), float(vol.max())
+
+    # Render (parallel)
+    print("🎨 Rendering...")
+    jobs = [(vol[z], vmin, vmax, args.clip_limit, args.tile,
+             particles, args.psize, z, args.bin_factor) for z in seq]
+    if args.parallel and len(jobs) > 1:
+        with Pool(min(cpu_count(), len(jobs))) as pool:
+            frames = list(tqdm(pool.imap(render_slice, jobs), total=len(jobs)))
+    else:
+        frames = [render_slice(j) for j in tqdm(jobs)]
+
+    # Encode
+    print(f"🎞️ {args.output}")
+    w = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"MJPG"), args.fps, (out_w, out_h))
+    if not w.isOpened():
+        w = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"I420"), args.fps, (out_w, out_h))
+    for f in tqdm(frames):
+        w.write(f)
+    w.release()
+    print(f"✅ {args.output}")
+
+
+if __name__ == "__main__":
+    main()
