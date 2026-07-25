@@ -26,58 +26,70 @@ except ImportError:
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-#  Pure Python IMOD parser (no native bindings needed)
+#  IMOD parser — try native bindings first, then pure Python fallback
 # ═════════════════════════════════════════════════════════════════════════════
 
-_ID_IMOD = 0x494D4F44  # b"IMOD"
+try:
+    import imodfile as _imodfile
+    _HAS_IMOD_NATIVE = True
+except ImportError:
+    _HAS_IMOD_NATIVE = False
+
 _ID_OBJT = 0x4F424A54  # b"OBJT"
 _ID_CONT = 0x434F4E54  # b"CONT"
 _ID_POIN = 0x504F494E  # b"POIN"
 _ID_IEOF = 0x49454F46  # b"IEOF"
 
 
-def _read_imod_chunks(data: bytes, offset: int = 0):
-    """Yield (chunk_id, chunk_data) from a big-endian IMOD binary stream."""
-    while offset + 8 <= len(data):
-        cid = struct.unpack_from(">I", data, offset)[0]
+def _iter_chunks(data: bytes, start: int = 0):
+    """Yield (chunk_id, chunk_data) from big-endian IMOD binary."""
+    off = start
+    while off + 8 <= len(data):
+        cid = struct.unpack_from(">I", data, off)[0]
         if cid == _ID_IEOF:
             break
-        size = struct.unpack_from(">I", data, offset + 4)[0]
+        size = struct.unpack_from(">I", data, off + 4)[0]
         if size == 0:
-            offset += 8
+            off += 8
             continue
-        chunk = data[offset + 8: offset + 8 + size]
-        offset += 8 + size
-        if offset % 4:
-            offset += 4 - (offset % 4)
+        chunk = data[off + 8: off + 8 + size]
+        off += 8 + size
+        if off % 4:
+            off += 4 - (off % 4)
         yield cid, chunk
 
 
 def load_imod_points(path: str) -> list[tuple[float, float, float]]:
-    """Read all contour points from an IMOD binary file."""
+    """Read all contour points from an IMOD binary file.
+
+    Uses the native Rust imodfile bindings when available,
+    falls back to a pure Python parser otherwise.
+    """
+    if _HAS_IMOD_NATIVE:
+        model = _imodfile.load(path)
+        arr = model.points()  # (N, 3) float32 numpy array
+        return [(float(arr[i, 0]), float(arr[i, 1]), float(arr[i, 2]))
+                for i in range(arr.shape[0])]
+
+    # Pure Python fallback
     with open(path, "rb") as f:
         data = f.read()
     pts = []
-    # Top-level chunks
-    for cid, chunk in _read_imod_chunks(data):
+    for cid, chunk in _iter_chunks(data):
         if cid == _ID_OBJT:
-            _parse_obj(chunk, pts)
+            _walk_obj(chunk, pts)
     return pts
 
 
-def _parse_obj(data: bytes, pts: list):
-    """Walk OBJT sub-chunks for CONTs."""
-    for cid, chunk in _read_imod_chunks(data):
+def _walk_obj(data: bytes, pts: list):
+    for cid, chunk in _iter_chunks(data):
         if cid == _ID_CONT:
-            _parse_cont(chunk, pts)
+            _walk_cont(chunk, pts)
 
 
-def _parse_cont(data: bytes, pts: list):
-    """Extract POIN sub-chunks from a CONT."""
-    for cid, chunk in _read_imod_chunks(data):
+def _walk_cont(data: bytes, pts: list):
+    for cid, chunk in _iter_chunks(data):
         if cid == _ID_POIN:
-            n = chunk[:12]  # just peek format (actually use whole)
-            # POIN: array of (x,y,z) big-endian f32, 12 bytes per point
             for i in range(len(chunk) // 12):
                 off = i * 12
                 x, y, z = struct.unpack_from(">fff", chunk, off)
