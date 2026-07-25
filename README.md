@@ -20,9 +20,13 @@ Or with [uv](https://docs.astral.sh/uv/):
 uv run mrc2movie.py -m tomogram.mrc -o movie.avi
 ```
 
-## Particle file format
+## Particle input
 
-Simple text file, one particle per line:
+Both IMOD binary files and text files are supported:
+
+**IMOD** (`.mod`):  `-i model.mod` — automatically parsed, no extra dependencies.
+
+**Text file**:  `-p particles.txt` — one `x y z` per line:
 
 ```txt
 720  511  0      # x  y  z
@@ -37,6 +41,7 @@ Comma-separated also works: `720,511,0`. Lines starting with `#` and blank lines
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-m` / `--mrc` | (required) | MRC input file |
+| `-i` / `--imod` | — | IMOD particle file (.mod) |
 | `-p` / `--particles` | — | Particle coordinates file (txt) |
 | `-o` / `--output` | `output.avi` | Output video |
 | `-f` / `--fps` | `10` | Frame rate |

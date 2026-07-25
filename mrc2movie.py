@@ -2,16 +2,15 @@
 """
 Convert MRC tomograms to video with optional particle overlay.
 
-Particle coordinates can be provided as a simple text file:
-  one particle per line:  x  y  z
-  or:                     x,y,z
-  # comments and blank lines are ignored.
+Particles can come from:
+  -i model.mod     IMOD binary file (auto-detected, pure Python parser)
+  -p particles.txt text file, one "x y z" per line
 
-Dependencies: mrcfile, numpy, opencv-python, tqdm
-  pip install mrcfile numpy opencv-python tqdm
+Dependencies: pip install mrcfile numpy opencv-python tqdm
 """
 
 import argparse
+import struct
 import sys
 from multiprocessing import Pool, cpu_count
 
@@ -26,11 +25,72 @@ except ImportError:
     sys.exit(1)
 
 
-# ── Load particles from a simple text file ──
+# ═════════════════════════════════════════════════════════════════════════════
+#  Pure Python IMOD parser (no native bindings needed)
+# ═════════════════════════════════════════════════════════════════════════════
 
-def load_particles(path: str) -> list[tuple[float, float, float]]:
-    """Read x y z (or x,y,z) particles from a text file."""
-    pts: list[tuple[float, float, float]] = []
+_ID_IMOD = 0x494D4F44  # b"IMOD"
+_ID_OBJT = 0x4F424A54  # b"OBJT"
+_ID_CONT = 0x434F4E54  # b"CONT"
+_ID_POIN = 0x504F494E  # b"POIN"
+_ID_IEOF = 0x49454F46  # b"IEOF"
+
+
+def _read_imod_chunks(data: bytes, offset: int = 0):
+    """Yield (chunk_id, chunk_data) from a big-endian IMOD binary stream."""
+    while offset + 8 <= len(data):
+        cid = struct.unpack_from(">I", data, offset)[0]
+        if cid == _ID_IEOF:
+            break
+        size = struct.unpack_from(">I", data, offset + 4)[0]
+        if size == 0:
+            offset += 8
+            continue
+        chunk = data[offset + 8: offset + 8 + size]
+        offset += 8 + size
+        if offset % 4:
+            offset += 4 - (offset % 4)
+        yield cid, chunk
+
+
+def load_imod_points(path: str) -> list[tuple[float, float, float]]:
+    """Read all contour points from an IMOD binary file."""
+    with open(path, "rb") as f:
+        data = f.read()
+    pts = []
+    # Top-level chunks
+    for cid, chunk in _read_imod_chunks(data):
+        if cid == _ID_OBJT:
+            _parse_obj(chunk, pts)
+    return pts
+
+
+def _parse_obj(data: bytes, pts: list):
+    """Walk OBJT sub-chunks for CONTs."""
+    for cid, chunk in _read_imod_chunks(data):
+        if cid == _ID_CONT:
+            _parse_cont(chunk, pts)
+
+
+def _parse_cont(data: bytes, pts: list):
+    """Extract POIN sub-chunks from a CONT."""
+    for cid, chunk in _read_imod_chunks(data):
+        if cid == _ID_POIN:
+            n = chunk[:12]  # just peek format (actually use whole)
+            # POIN: array of (x,y,z) big-endian f32, 12 bytes per point
+            for i in range(len(chunk) // 12):
+                off = i * 12
+                x, y, z = struct.unpack_from(">fff", chunk, off)
+                pts.append((x, y, z))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Particle loading
+# ═════════════════════════════════════════════════════════════════════════════
+
+def load_txt_particles(path: str) -> list[tuple[float, float, float]]:
+    """Read x y z particles from a text file."""
+    pts = []
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -40,34 +100,32 @@ def load_particles(path: str) -> list[tuple[float, float, float]]:
             if len(parts) < 3:
                 continue
             try:
-                x, y, z = float(parts[0]), float(parts[1]), float(parts[2])
-                pts.append((x, y, z))
+                pts.append((float(parts[0]), float(parts[1]), float(parts[2])))
             except ValueError:
                 continue
     return pts
 
 
-# ── Slice rendering ──
+# ═════════════════════════════════════════════════════════════════════════════
+#  Slice rendering
+# ═════════════════════════════════════════════════════════════════════════════
 
 def render_slice(args: tuple) -> np.ndarray:
-    """Normalize → CLAHE → RGB → draw particles → return BGR frame."""
+    """Normalize → CLAHE → RGB → draw particles → BGR frame."""
     (slice_data, vmin, vmax, clip_limit, tile_size,
      particles, psize, z, bin_f) = args
 
-    # Normalize to [0, 255]
     if vmax > vmin:
-        img = np.clip((slice_data.astype(np.float32) - vmin) * (255.0 / (vmax - vmin)), 0, 255).astype(np.uint8)
+        img = np.clip((slice_data.astype(np.float32) - vmin) *
+                      (255.0 / (vmax - vmin)), 0, 255).astype(np.uint8)
     else:
         img = np.zeros_like(slice_data, dtype=np.uint8)
 
-    # CLAHE
-    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(tile_size, tile_size))
+    clahe = cv2.createCLAHE(clipLimit=clip_limit,
+                            tileGridSize=(tile_size, tile_size))
     img = clahe.apply(img)
-
-    # To BGR for colour overlay
     frame = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-    # Draw particles
     if particles and psize > 0:
         h, w = frame.shape[:2]
         for px, py, pz in particles:
@@ -81,12 +139,10 @@ def render_slice(args: tuple) -> np.ndarray:
     return frame
 
 
-# ── Helpers ──
-
-def slice_sequence(start: int, end: int, mode: str, pause: int, cycles: int) -> list[int]:
+def slice_sequence(start: int, end: int, mode: str,
+                   pause: int, cycles: int) -> list[int]:
     if mode == "forward":
         return list(range(start, end + 1))
-    # pingpong
     seq = []
     for c in range(cycles):
         seq += list(range(start, end + 1))
@@ -98,13 +154,19 @@ def slice_sequence(start: int, end: int, mode: str, pause: int, cycles: int) -> 
     return seq
 
 
+# ═════════════════════════════════════════════════════════════════════════════
+#  CLI
+# ═════════════════════════════════════════════════════════════════════════════
+
 def main():
     p = argparse.ArgumentParser(description="MRC tomogram → video")
-    p.add_argument("-m", "--mrc", required=True)
-    p.add_argument("-p", "--particles", help="x y z particle file (one per line)")
+    p.add_argument("-m", "--mrc", required=True, help="MRC input file")
+    p.add_argument("-i", "--imod", help="IMOD particle file (.mod)")
+    p.add_argument("-p", "--particles", help="Particle text file (x y z per line)")
     p.add_argument("-o", "--output", default="output.avi")
     p.add_argument("-f", "--fps", type=float, default=10)
-    p.add_argument("-b", "--bin", type=int, default=1, dest="bin_factor", help="Downsample factor")
+    p.add_argument("-b", "--bin", type=int, default=1, dest="bin_factor",
+                   help="Downsample factor")
     p.add_argument("--start", type=int, default=0)
     p.add_argument("--end", type=int, default=0, help="0 = last slice")
     p.add_argument("--clip-limit", type=float, default=2.0, help="CLAHE contrast")
@@ -113,28 +175,35 @@ def main():
     p.add_argument("--pause", type=int, default=5)
     p.add_argument("--cycles", type=int, default=1)
     p.add_argument("--psize", type=int, default=3, help="Particle radius")
-    p.add_argument("--no-parallel", action="store_false", dest="parallel", default=True)
+    p.add_argument("--no-parallel", action="store_false", dest="parallel",
+                   default=True)
     args = p.parse_args()
 
     # Read MRC
     print(f"📁 {args.mrc}")
     with mrcfile.mmap(args.mrc, mode="r") as mrc:
-        vol = mrc.data  # shape: (nz, ny, nx)
+        vol = mrc.data
     nz, ny, nx = vol.shape
     print(f"📊 {nx}×{ny}×{nz}")
 
     # Read particles
     particles = []
+    if args.imod:
+        print(f"📁 IMOD: {args.imod}")
+        particles = load_imod_points(args.imod)
+        print(f"📌 {len(particles)} particles")
     if args.particles:
-        particles = load_particles(args.particles)
-        print(f"📌 {len(particles)} particles from {args.particles}")
+        print(f"📁 Particles: {args.particles}")
+        particles = load_txt_particles(args.particles)
+        print(f"📌 {len(particles)} particles")
 
     # Slice range
     start = args.start
     end = args.end if args.end != 0 else nz - 1
     end = min(end, nz - 1)
     if start > end:
-        print(f"❌ start {start} > end {end}"); sys.exit(1)
+        print(f"❌ start {start} > end {end}")
+        sys.exit(1)
 
     seq = slice_sequence(start, end, args.mode, args.pause, args.cycles)
     total = len(seq)
@@ -143,11 +212,10 @@ def main():
     out_w, out_h = nx // args.bin_factor, ny // args.bin_factor
     print(f"📐 {out_w}×{out_h}")
 
-    # Load volume data
     vol = np.array(vol, dtype=np.float32, copy=False)
     vmin, vmax = float(vol.min()), float(vol.max())
 
-    # Render (parallel)
+    # Render
     print("🎨 Rendering...")
     jobs = [(vol[z], vmin, vmax, args.clip_limit, args.tile,
              particles, args.psize, z, args.bin_factor) for z in seq]
@@ -159,9 +227,11 @@ def main():
 
     # Encode
     print(f"🎞️ {args.output}")
-    w = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"MJPG"), args.fps, (out_w, out_h))
+    w = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"MJPG"),
+                        args.fps, (out_w, out_h))
     if not w.isOpened():
-        w = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"I420"), args.fps, (out_w, out_h))
+        w = cv2.VideoWriter(args.output, cv2.VideoWriter_fourcc(*"I420"),
+                            args.fps, (out_w, out_h))
     for f in tqdm(frames):
         w.write(f)
     w.release()
